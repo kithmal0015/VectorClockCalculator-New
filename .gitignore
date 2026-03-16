@@ -1,0 +1,15 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build output
+**/bin/
+**/obj/
+
+# Logs
+**/logs/
+
+# OS files
+Thumbs.db
+.DS_Store

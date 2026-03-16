@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Calculator Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.0/signalr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #13131a;
+            --bg-tertiary: #1a1a24;
+            --bg-elevated: #1f1f2e;
+            --border-primary: #2a2a3e;
+            --border-accent: #3a3a52;
+            --text-primary: #e4e4e7;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --accent-purple: #8b5cf6;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-red: #b91010;
+            --gradient-primary: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
+            --gradient-accent: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 280px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-primary);
+            padding: 24px;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 32px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-primary);
+        }
+
+        .logo-icon {
+            font-size: 2rem;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo-text {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .nav-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--gradient-primary);
+            color: white;
+        }
+
+        /* Connection Status in Sidebar */
+        .sidebar-status {
+            margin-top: auto;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-primary);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            border: 1px solid var(--border-primary);
+        }
+
+        .status-pulse {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-pulse.connected { background: var(--accent-green); }
+        .status-pulse.disconnected { background: var(--accent-green); }
+
+        /* Main Content Area */
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+        }
+
+        .top-bar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-primary);
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .top-bar-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .content-wrapper {
+            padding: 32px;
+            max-width: 1800px;
+        }
+
+        /* Card System */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--border-accent);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: 12px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+            opacity: 0.8;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 4px;
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Calculator Interface */
+        .calc-container {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-accent);
+            border-radius: 12px;
+            padding: 28px;
+        }
+
+        .calc-info {
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--accent-purple);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        select, input {
+            padding: 12px 14px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--accent-purple);
+            background: var(--bg-elevated);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.95rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-primary);
+        }
+
+        .btn-secondary:hover {
+            box-shadow: none;
+            border-color: var(--border-accent);
+        }
+
+        /* Server Grid */
+        .servers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .server-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .server-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .server-card.online::before { background: var(--accent-green); }
+        .server-card.offline::before { background: var(--text-muted); }
+        .server-card.partitioned::before { background: var(--accent-red); }
+
+        .server-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--border-accent);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+
+        .server-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .server-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-online { background: var(--accent-green); color: #fff; }
+        .badge-offline { background: var(--text-muted); color: #fff; }
+        .badge-partitioned { background: var(--accent-red); color: #fff; }
+
+        .server-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .metric {
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-value {
+            display: block;
+            font-size: 1.4rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent-cyan);
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .vector-clock {
+            background: var(--bg-secondary);
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+            word-break: break-all;
+        }
+
+        /* History Table */
+        .history-wrapper {
+            max-height: 500px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border-primary);
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .history-table th {
+            background: var(--bg-tertiary);
+            padding: 14px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            position: sticky;
+            top: 0;
+            border-bottom: 1px solid var(--border-primary);
+        }
+
+        .history-table td {
+            padding: 14px;
+            border-bottom: 1px solid var(--border-primary);
+            font-size: 0.9rem;
+        }
+
+        .history-table tbody tr {
+            transition: background 0.2s;
+        }
+
+        .history-table tbody tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .result-success { color: var(--accent-green); font-weight: 600; }
+        .result-failed { color: #ef4444; font-weight: 600; }
+
+        /* Chart Container */
+        .chart-wrapper {
+            position: relative;
+            height: 350px;
+            margin-top: 20px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-accent);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-purple);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        /* Add padding to sections for better scroll positioning */
+        #statistics-section,
+        #calculator-section,
+        #servers-section,
+        #history-section {
+            scroll-margin-top: 80px; /* Account for top bar height */
+        }
+
+        /* Navigation active state enhancement */
+        .nav-item.active {
+            background: var(--gradient-primary);
+            color: white;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="logo">
+           
+            <span class="logo-text">Vector Clock</span>
+        </div>
+        
+        <nav>
+            <div class="nav-section">
+                <div class="nav-title">Navigation</div>
+                <div class="nav-item active" data-section="statistics-section">
+                    <span>📊</span>
+                    <span>Dashboard</span>
+                </div>
+                <div class="nav-item" data-section="calculator-section">
+                    <span>🔢</span>
+                    <span>Calculator</span>
+                </div>
+                <div class="nav-item" data-section="servers-section">
+                    <span>🖥️</span>
+                    <span>Servers</span>
+                </div>
+                <div class="nav-item" data-section="history-section">
+                    <span>📜</span>
+                    <span>History</span>
+                </div>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-title">System</div>
+                <div class="nav-item">
+                    <span>⚙️</span>
+                    <span>Settings</span>
+                </div>
+                <div class="nav-item">
+                    <span>❓</span>
+                    <span>Help</span>
+            </div>
+        </nav>
+        
+        <div class="sidebar-status">
+            <div class="status-indicator">
+                <span class="status-pulse disconnected" id="statusPulse"></span>
+                <div>
+                    <!--<div style="font-size: 0.75rem; color: var(--text-muted);">Connection</div>-->
+                    <div id="connectionStatus" style="font-size: 0.9rem; font-weight: 600;">Connected</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="page-title">Dashboard Overview</div>
+            <div class="top-bar-info">
+                <span id="currentLeader">Main One: server3</span>
+                <span>/</span>
+                <span id="currentTime">--:--:--</span>
+            </div>
+        </div>
+
+        <div class="content-wrapper">
+            <!-- Statistics Overview -->
+            <div id="statistics-section" class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-value" id="totalOps" style="color: var(--accent-blue);">0</div>
+                    <div class="stat-label">Total Operations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-value" id="successOps" style="color: var(--accent-green);">0</div>
+                    <div class="stat-label">Successful</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">❌</div>
+                    <div class="stat-value" id="failedOps" style="color: var(--accent-red);">0</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📈</div>
+                    <div class="stat-value" id="successRate" style="color: var(--accent-yellow);">0%</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+            </div>
+
+            <!-- Calculator Section -->
+            <div id="calculator-section" class="card">
+                <div class="card-header">
+                    <div class="card-title">Perform Calculation</div>
+                </div>
+                <div class="calc-container">
+                    <div class="calc-info">
+                        <span>You Have to Select a Server, Load Strategy and Operation with Values</span>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Server Strategy</label>
+                            <select id="serverSelect">
+                                
+                                <option value="http://localhost:5000">Server1 (Port 5000)</option>
+                                <option value="http://localhost:5001">Server2 (Port 5001)</option>
+                                <option value="http://localhost:5002">Server3 (Port 5002)</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Load Strategy</label>
+                            <select id="loadStrategy">
+                                <option value="RoundRobin">Round Robin</option>
+                                <option value="Random">Random</option>
+                                <option value="LeastLoaded">Least Loaded</option>
+                                <option value="LeaderOnly">Leader Only</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Operation</label>
+                            <select id="operationSelect">
+                                <option value="square">Square (x²)</option>
+                                <option value="cube">Cube (x³)</option>
+                                <option value="multiply">Multiply (x × y)</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Number</label>
+                            <input type="number" id="number1" step="any" placeholder="Enter number">
+                        </div>
+                    </div>
+                    <div id="number2Row" style="display: none; margin-bottom: 16px;">
+                        <div class="form-field">
+                            <label class="form-label">Second Number (for Multiply)</label>
+                            <input type="number" id="number2" step="any" placeholder="Enter second number">
+                        </div>
+                    </div>
+                    <button class="btn" onclick="performCalculation()" id="calcBtn">
+                        <span>Calculate</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Server Status -->
+            <div id="servers-section" class="card">
+                <div class="card-header">
+                    <div class="card-title">Server Status</div>
+                </div>
+                <div class="servers-grid" id="serversContainer">
+                    <!-- Servers populated here -->
+                </div>
+            </div>
+
+            <!-- Operation History -->
+            <div id="history-section" class="card">
+                <div class="card-header">
+                    <div class="card-title">Operation History</div>
+                    <button class="btn btn-secondary" onclick="clearHistory()">Clear History</button>
+                </div>
+                <div class="history-wrapper">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Client</th>
+                                <th>Server</th>
+                                <th>Operation</th>
+                                <th>Input</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody">
+                            <tr>
+                                <td colspan="6">
+                                    <div class="empty-state">
+                                        <div>No operations yet. Start calculating to see history.</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="dashboard.js"></script>
+    
+    <script>
+        // Navigation functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const navItems = document.querySelectorAll('.nav-item[data-section]');
+            
+            navItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    // Remove active class from all nav items
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    
+                    // Add active class to clicked item
+                    this.classList.add('active');
+                    
+                    // Get target section
+                    const targetSection = this.getAttribute('data-section');
+                    const targetElement = document.getElementById(targetSection);
+                    
+                    if (targetElement) {
+                        // Smooth scroll to target section
+                        targetElement.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                        
+                        // Update page title based on selection
+                        const pageTitle = document.querySelector('.page-title');
+                        const sectionName = this.querySelector('span:last-child').textContent;
+                        if (pageTitle) {
+                            pageTitle.textContent = sectionName + ' Overview';
+                        }
+                    }
+                });
+            });
+            
+            console.log('✅ Navigation initialized');
+        });
+    </script>
+</body>
+</html>

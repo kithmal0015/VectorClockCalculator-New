@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+option csharp_namespace = "CalculatorServer";
+
+package calculator;
+
+service Calculator {
+  rpc Square (CalculationRequest) returns (CalculationResponse);
+  rpc Cube (CalculationRequest) returns (CalculationResponse);
+  rpc SlowMultiply (MultiplyRequest) returns (CalculationResponse);
+}
+
+message CalculationRequest {
+  double number = 1;
+  map<string, int32> vectorClock = 2;
+  string clientId = 3;
+}
+
+message MultiplyRequest {
+  double number1 = 1;
+  double number2 = 2;
+  map<string, int32> vectorClock = 3;
+  string clientId = 4;
+}
+
+message CalculationResponse {
+  double result = 1;
+  bool isSuccess = 2;
+  string errorMessage = 3;
+  map<string, int32> vectorClock = 4;
+}
